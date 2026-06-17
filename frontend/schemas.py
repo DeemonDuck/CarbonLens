@@ -47,3 +47,17 @@ class EnergyInput(BaseModel):
         "electric",
         "firewood",
     ]
+
+
+class DietInput(BaseModel):
+    """Diet pattern - one of the biggest hidden contributors to footprint."""
+
+    diet_type: Literal[
+        "vegan",
+        "vegetarian",
+        "eggetarian",
+        "non_vegetarian_moderate",
+        "non_vegetarian_heavy",
+    ]
+
+
