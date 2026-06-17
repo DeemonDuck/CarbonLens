@@ -75,3 +75,28 @@ class UserLifestyleInput(BaseModel):
     energy: EnergyInput
     diet: DietInput
 
+
+# ---------------------------------------------------------------------
+# Output-side schemas (filled in by Layer 2 - calculator.py)
+# ---------------------------------------------------------------------
+
+class CategoryBreakdown(BaseModel):
+    """How much one category (transport/energy/diet) contributed."""
+
+    category: Literal["transport", "energy", "diet"]
+    kg_co2_per_month: float
+    percentage_of_total: float
+
+
+class FootprintResult(BaseModel):
+    """
+    The complete output of Layer 2.
+
+    Layer 3 (awareness.py) and Layer 4 (recommendations.py) both
+    consume this object - neither of them needs to know anything
+    about emission factors or how the math was done.
+    """
+
+    total_kg_co2_per_month: float
+    breakdown: list[CategoryBreakdown]
+    dominant_category: Literal["transport", "energy", "diet"]
