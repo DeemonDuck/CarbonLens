@@ -33,3 +33,17 @@ class TransportInput(BaseModel):
     weekly_distance_km: float = Field(
         ..., ge=0, description="Total distance covered per week, in km"
     )
+
+
+class EnergyInput(BaseModel):
+    """Household energy usage - electricity + cooking fuel."""
+
+    monthly_electricity_kwh: float = Field(
+        ..., ge=0, description="Monthly electricity usage in kWh (check your bill)"
+    )
+    cooking_fuel: Literal[
+        "lpg",
+        "piped_natural_gas",
+        "electric",
+        "firewood",
+    ]
