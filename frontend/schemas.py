@@ -61,3 +61,17 @@ class DietInput(BaseModel):
     ]
 
 
+class UserLifestyleInput(BaseModel):
+    """
+    The full Layer 1 payload.
+
+    This is the single object that gets handed off to Layer 2.
+    Nothing downstream should ever need to know HOW this data was
+    collected (form, API call, OCR'd bill, etc.) - only that it
+    matches this shape.
+    """
+
+    transport: TransportInput
+    energy: EnergyInput
+    diet: DietInput
+
