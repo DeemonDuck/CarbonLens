@@ -47,4 +47,35 @@ def build_equivalents(result: FootprintResult) -> list[str]:
         f"(one tree, growing for that many years) to soak this back up.",
         f"Equivalent to charging a smartphone {charges_equivalent:,.0f} times.",
     ]
+
+
+def build_story(result: FootprintResult) -> dict:
+    """
+    Assembles the full 'AI Awareness Card' content: a headline, a short
+    narrative paragraph, and the supporting equivalents - everything
+    the frontend needs to render the story instead of a bare number.
+    """
+ 
+    dominant_label = CATEGORY_LABELS[result.dominant_category]
+    dominant_breakdown = next(
+        b for b in result.breakdown if b.category == result.dominant_category
+    )
+ 
+    headline = f"You generated {result.total_kg_co2_per_month:,.0f} kg CO₂ this month."
+ 
+    narrative = (
+        f"That's not one big decision - it's the sum of small, everyday ones. "
+        f"{dominant_label} is doing most of the damage here, contributing "
+        f"{dominant_breakdown.percentage_of_total:.0f}% of your total. "
+        f"Nobody's asking you to overhaul your life overnight - but knowing "
+        f"where the weight is sitting is the first real step."
+    )
+ 
+    return {
+        "headline": headline,
+        "narrative": narrative,
+        "dominant_category": result.dominant_category,
+        "dominant_percentage": dominant_breakdown.percentage_of_total,
+        "equivalents": build_equivalents(result),
+    }
  
