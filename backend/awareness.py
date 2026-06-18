@@ -30,3 +30,21 @@ CATEGORY_LABELS = {
 }
 
 
+def build_equivalents(result: FootprintResult) -> list[str]:
+    """A handful of relatable comparisons for the total monthly footprint."""
+ 
+    total = result.total_kg_co2_per_month
+ 
+    km_equivalent = total / AVG_PETROL_CAR_KG_CO2_PER_KM
+    trips_equivalent = km_equivalent / (DELHI_JAIPUR_ONE_WAY_KM * 2)  # round trips
+    tree_years_equivalent = total / TREE_ABSORPTION_KG_CO2_PER_YEAR
+    charges_equivalent = total / SMARTPHONE_CHARGE_KG_CO2
+ 
+    return [
+        f"Like driving an average petrol car for {km_equivalent:,.0f} km "
+        f"— roughly {trips_equivalent:.1f} Delhi–Jaipur round trips.",
+        f"It would take about {tree_years_equivalent:.1f} tree-years "
+        f"(one tree, growing for that many years) to soak this back up.",
+        f"Equivalent to charging a smartphone {charges_equivalent:,.0f} times.",
+    ]
+ 
