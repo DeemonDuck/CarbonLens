@@ -66,3 +66,32 @@ def _build_llm_prompt(result: FootprintResult, user_input: UserLifestyleInput) -
     )
 
 
+def generate_recommendations(
+    result: FootprintResult, user_input: UserLifestyleInput
+) -> list[str]:
+    """
+    The single entry point the frontend calls when the user clicks
+    "How can I reduce this?". Tries the LLM path first, falls back
+    to rule-based tips if anything goes wrong.
+    """
+
+    client = get_anthropic_client()
+    if client is None:
+        return _rule_based_recommendations(result.dominant_category)
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=300,
+            messages=[{"role": "user", "content": _build_llm_prompt(result, user_input)}],
+        )
+        text = "".join(
+            block.text for block in response.content if block.type == "text"
+        )
+        tips = [line.strip(" -0123456789.") for line in text.split("\n") if line.strip()]
+        return tips if tips else _rule_based_recommendations(result.dominant_category)
+
+    except Exception:
+        # Network issue, missing/invalid key, rate limit - whatever it is,
+        # the user still gets useful tips, just not LLM-personalized ones.
+        return _rule_based_recommendations(result.dominant_category)
