@@ -45,3 +45,24 @@ RULE_BASED_TIPS = {
     ],
 }
 
+
+def _rule_based_recommendations(dominant_category: str) -> list[str]:
+    return RULE_BASED_TIPS.get(dominant_category, [])
+
+
+def _build_llm_prompt(result: FootprintResult, user_input: UserLifestyleInput) -> str:
+    return (
+        f"A person's estimated monthly carbon footprint is "
+        f"{result.total_kg_co2_per_month} kg CO2. Their breakdown is: "
+        f"{[(b.category, b.kg_co2_per_month) for b in result.breakdown]}. "
+        f"Their biggest contributor is {result.dominant_category}. "
+        f"Their transport mode is {user_input.transport.mode}, diet is "
+        f"{user_input.diet.diet_type}, and cooking fuel is "
+        f"{user_input.energy.cooking_fuel}.\n\n"
+        f"Give exactly 3 short, specific, encouraging suggestions (one "
+        f"sentence each) to reduce their footprint, grounded in the "
+        f"details above - not generic advice. No preamble, just the "
+        f"3 suggestions as a numbered list."
+    )
+
+
