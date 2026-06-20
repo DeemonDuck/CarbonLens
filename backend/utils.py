@@ -2,17 +2,38 @@
 Small shared helpers. Nothing in here is carbon-specific - it's just
 plumbing other backend files reuse, so it doesn't belong in any one
 of them.
+
+No .env handling here on purpose - this project's only secret
+(ANTHROPIC_API_KEY) is entirely optional, and when you want it,
+it's set as a Streamlit Cloud secret (or any host's env var), not
+a local file.
 """
 
 import os
-from dotenv import load_dotenv
-
-load_dotenv()  # reads .env if present, no-op otherwise
 
 
 def get_anthropic_api_key() -> str | None:
-    """Returns the API key from environment, or None if not configured."""
-    return os.getenv("ANTHROPIC_API_KEY")
+    """
+    Returns the API key, checking in order:
+      1. Environment variable (works locally via .env, and on Hugging
+         Face Spaces, where Repository secrets land as real env vars)
+      2. Streamlit secrets (st.secrets) - this is how Streamlit
+         Community Cloud exposes secrets, NOT as raw env vars
+    Returns None if neither has it configured - callers must handle
+    that case (see recommendations.py's rule-based fallback).
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if api_key:
+        return api_key
+
+    try:
+        import streamlit as st
+        return st.secrets.get("ANTHROPIC_API_KEY")
+    except Exception:
+        # Either streamlit isn't running in a context with secrets
+        # configured, or this is being called from a test/script
+        # outside Streamlit entirely. Either way - no key found.
+        return None
 
 
 def get_anthropic_client():
