@@ -2,6 +2,8 @@
 
 **See the weight of your everyday choices — without being nagged about them.**
 
+🔗 **Live demo:** [carbon-lens-1.streamlit.app](https://carbon-lens-1.streamlit.app/)
+
 Most carbon footprint tools ask you to log every meal, every commute, every
 kWh, forever. People try it for three days and quit. This app does the
 opposite: answer a handful of honest questions *once*, and get back a
