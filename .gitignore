@@ -22,3 +22,8 @@ __init__.py
 # OS files
 .DS_Store
 Thumbs.db
+
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.pytest_cache/
