@@ -15,17 +15,15 @@ Flow (matches the diagram):
 Accessibility notes
 -------------------
 Every interactive widget carries:
-  - A descriptive visible label (not relying on placeholder text alone)
-  - label_visibility="visible" set explicitly so screen-readers
-    see the label even if we later move to a collapsed layout
-  - A help= tooltip that explains *why* we're asking, not just *what*
-  - A stable key= so Streamlit's accessibility tree stays consistent
-    across reruns (avoids anonymous widget IDs)
-  - st.caption() context before each section so users understand
-    what the group of questions is measuring
-
-The theme (config.toml) sets a foreground/background pair that meets
-the WCAG 2.1 AA contrast ratio of ≥ 4.5:1 for normal text.
+  - label_visibility="visible" so screen readers always announce the label
+  - help= tooltip explaining why we ask, not just what to enter
+  - key= for a stable, predictable accessibility tree across reruns
+Each section opens with st.caption() context before the inputs themselves,
+so screen-reader and cognitive-disability users understand a group's
+purpose before navigating into it. Error messages distinguish ValueError /
+KeyError / Exception with actionable text. Page title is a full descriptive
+string read by assistive technologies as the document title.
+Color contrast: all theme pairs exceed WCAG 2.1 AA (≥4.5:1); see config.toml.
 """
 
 import sys
@@ -42,13 +40,170 @@ from backend.schemas import (
     TRANSPORT_MODE_LABELS,
     COOKING_FUEL_LABELS,
     DIET_TYPE_LABELS,
+    FootprintResult,
+    StoryCard,
 )
 from backend.calculator import calculate_footprint
 from backend.awareness import build_story
 from backend.recommendations import generate_recommendations
 
-# Page config — title and icon appear in the browser tab and are read
-# by assistive technologies as the document title.
+
+def render_transport_inputs() -> tuple[str, float]:
+    """Render the Transport input section and return (transport_mode_code, weekly_km)."""
+    st.subheader("🚗 Transport")
+    st.caption(
+        "Transport is often the single largest contributor to a personal "
+        "carbon footprint. Pick the mode you rely on most, then estimate "
+        "your total weekly distance — commutes, errands, everything."
+    )
+    transport_code_by_label = {label: code for code, label in TRANSPORT_MODE_LABELS.items()}
+    transport_choice = st.selectbox(
+        "How do you mostly travel?",
+        options=list(TRANSPORT_MODE_LABELS.values()),
+        help=(
+            "Choose whichever mode covers the majority of your weekly travel. "
+            "If you use multiple modes, pick the one with the most km."
+        ),
+        label_visibility="visible",
+        key="transport_mode_select",
+    )
+    weekly_distance_km = st.number_input(
+        "Roughly how many km do you cover per week (all trips combined)?",
+        min_value=0.0,
+        step=5.0,
+        value=50.0,
+        help=(
+            "Add up all your trips for a typical week — daily commute, "
+            "errands, weekend outings. An approximate figure is fine."
+        ),
+        label_visibility="visible",
+        key="weekly_distance_km_input",
+    )
+    return transport_code_by_label[transport_choice], weekly_distance_km
+
+
+def render_energy_inputs() -> tuple[float, str]:
+    """Render the Energy input section and return (monthly_kwh, cooking_fuel_code)."""
+    st.subheader("⚡ Energy")
+    st.caption(
+        "Household energy — electricity and cooking fuel — is the second "
+        "major lever. Your electricity bill lists your monthly units consumed "
+        "(kWh); use that figure directly."
+    )
+    monthly_electricity_kwh = st.number_input(
+        "Monthly electricity usage in kWh (check your electricity bill)",
+        min_value=0.0,
+        step=10.0,
+        value=150.0,
+        help=(
+            "Look for 'units consumed' on your most recent electricity bill. "
+            "For India, one unit = 1 kWh. A typical urban household uses "
+            "100–300 kWh per month."
+        ),
+        label_visibility="visible",
+        key="monthly_electricity_kwh_input",
+    )
+    fuel_code_by_label = {label: code for code, label in COOKING_FUEL_LABELS.items()}
+    fuel_choice = st.selectbox(
+        "What do you mostly cook with?",
+        options=list(COOKING_FUEL_LABELS.values()),
+        help=(
+            "Select your primary cooking fuel. Electric cooking energy is "
+            "already captured in your kWh figure above — no double-counting."
+        ),
+        label_visibility="visible",
+        key="cooking_fuel_select",
+    )
+    return monthly_electricity_kwh, fuel_code_by_label[fuel_choice]
+
+
+def render_diet_inputs() -> str:
+    """Render the Diet input section and return the diet_type code."""
+    st.subheader("🍽️ Diet")
+    st.caption(
+        "Diet is a hidden but significant contributor — food production "
+        "generates emissions even before it reaches your plate. Pick the "
+        "pattern that best describes a normal week for you."
+    )
+    diet_code_by_label = {label: code for code, label in DIET_TYPE_LABELS.items()}
+    diet_choice = st.selectbox(
+        "Which best describes your diet?",
+        options=list(DIET_TYPE_LABELS.values()),
+        help=(
+            "This is about typical patterns, not perfection. 'Moderate "
+            "non-vegetarian' means meat a few times a week; 'heavy' means "
+            "daily. Pick the closest fit."
+        ),
+        label_visibility="visible",
+        key="diet_type_select",
+    )
+    return diet_code_by_label[diet_choice]
+
+
+def build_lifestyle_input(
+    transport_mode: str,
+    weekly_distance_km: float,
+    monthly_electricity_kwh: float,
+    cooking_fuel: str,
+    diet_type: str,
+) -> UserLifestyleInput:
+    """Construct and validate the Layer 1 payload from raw form values."""
+    return UserLifestyleInput(
+        transport=TransportInput(
+            mode=transport_mode,  # type: ignore[arg-type]
+            weekly_distance_km=weekly_distance_km,
+        ),
+        energy=EnergyInput(
+            monthly_electricity_kwh=monthly_electricity_kwh,
+            cooking_fuel=cooking_fuel,  # type: ignore[arg-type]
+        ),
+        diet=DietInput(diet_type=diet_type),  # type: ignore[arg-type]
+    )
+
+
+def render_results(result: FootprintResult, story: StoryCard) -> None:
+    """Render the AI Awareness Card: metric, breakdown, equivalents, narrative."""
+    st.metric(
+        label="Estimated monthly carbon footprint",
+        value=f"{result.total_kg_co2_per_month:,.0f} kg CO₂/month",
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Where it came from**")
+        for b in result.breakdown:
+            st.write(f"{b.category.title()}: {b.percentage_of_total:.0f}%")
+    with col2:
+        st.markdown("**Equivalent to**")
+        for line in story.equivalents:
+            st.write(f"• {line}")
+
+    st.divider()
+    st.markdown("### 🪄 The story behind your number")
+    st.write(story.narrative)
+
+
+def render_recommendations(result: FootprintResult, lifestyle: UserLifestyleInput) -> None:
+    """Render the on-demand reduction tips button and its output."""
+    if st.button(
+        "How can I reduce this? 🌱",
+        key="get_recommendations_btn",
+        help=(
+            "Get personalised, evidence-based suggestions for reducing "
+            "your footprint — tailored to your biggest contributor."
+        ),
+    ):
+        with st.spinner("Putting together a few ideas..."):
+            tips = generate_recommendations(result, lifestyle)
+        st.markdown("**A few places to start:**")
+        for tip in tips:
+            st.write(f"- {tip}")
+
+
+# ---------------------------------------------------------------------
+# App entry point
+# ---------------------------------------------------------------------
+
 st.set_page_config(
     page_title="CarbonLens — Estimate your monthly carbon footprint",
     page_icon="🌍",
@@ -63,109 +218,14 @@ st.caption(
 
 st.divider()
 
-# ---------------------------------------------------------------------
 # Layer 1 - collect inputs
-# Accessibility: each section opens with a st.caption() that explains
-# what the group measures and why, so users understand the purpose
-# before they encounter the individual inputs.
-# ---------------------------------------------------------------------
-
-# --- Transport ---
-st.subheader("🚗 Transport")
-st.caption(
-    "Transport is often the single largest contributor to a personal "
-    "carbon footprint. Pick the mode you rely on most, then estimate "
-    "your total weekly distance — commutes, errands, everything."
-)
-
-# Reverse the canonical {code: label} mapping so the selectbox can show
-# labels while we still store the underlying code - codes/labels live
-# in exactly one place (schemas.py), not duplicated here.
-transport_code_by_label = {label: code for code, label in TRANSPORT_MODE_LABELS.items()}
-transport_choice = st.selectbox(
-    "How do you mostly travel?",
-    options=list(TRANSPORT_MODE_LABELS.values()),
-    help=(
-        "Choose whichever mode covers the majority of your weekly travel. "
-        "If you use multiple modes, pick the one with the most km."
-    ),
-    label_visibility="visible",
-    key="transport_mode_select",
-)
-weekly_distance_km = st.number_input(
-    "Roughly how many km do you cover per week (all trips combined)?",
-    min_value=0.0,
-    step=5.0,
-    value=50.0,
-    help=(
-        "Add up all your trips for a typical week — daily commute, "
-        "errands, weekend outings. An approximate figure is fine; "
-        "this isn't a precise log."
-    ),
-    label_visibility="visible",
-    key="weekly_distance_km_input",
-)
-
-# --- Energy ---
-st.subheader("⚡ Energy")
-st.caption(
-    "Household energy — electricity and cooking fuel — is the second "
-    "major lever. Your electricity bill lists your monthly units consumed "
-    "(kWh); use that figure directly."
-)
-
-monthly_electricity_kwh = st.number_input(
-    "Monthly electricity usage in kWh (check your electricity bill)",
-    min_value=0.0,
-    step=10.0,
-    value=150.0,
-    help=(
-        "Look for 'units consumed' on your most recent electricity bill. "
-        "For India, one unit = 1 kWh. A typical urban household uses "
-        "100–300 kWh per month."
-    ),
-    label_visibility="visible",
-    key="monthly_electricity_kwh_input",
-)
-fuel_code_by_label = {label: code for code, label in COOKING_FUEL_LABELS.items()}
-fuel_choice = st.selectbox(
-    "What do you mostly cook with?",
-    options=list(COOKING_FUEL_LABELS.values()),
-    help=(
-        "Select your primary cooking fuel. If you use both LPG and an "
-        "electric induction top, pick whichever you use more. Electric "
-        "cooking energy is already captured in your kWh figure above."
-    ),
-    label_visibility="visible",
-    key="cooking_fuel_select",
-)
-
-# --- Diet ---
-st.subheader("🍽️ Diet")
-st.caption(
-    "Diet is a hidden but significant contributor — food production "
-    "generates emissions even before it reaches your plate. Pick the "
-    "pattern that best describes a normal week for you."
-)
-
-diet_code_by_label = {label: code for code, label in DIET_TYPE_LABELS.items()}
-diet_choice = st.selectbox(
-    "Which best describes your diet?",
-    options=list(DIET_TYPE_LABELS.values()),
-    help=(
-        "This is about typical patterns, not perfection. 'Moderate "
-        "non-vegetarian' means meat a few times a week; 'heavy' means "
-        "daily. Pick the closest fit — there's no wrong answer."
-    ),
-    label_visibility="visible",
-    key="diet_type_select",
-)
+transport_mode, weekly_distance_km = render_transport_inputs()
+monthly_electricity_kwh, cooking_fuel = render_energy_inputs()
+diet_type = render_diet_inputs()
 
 st.divider()
 
-# ---------------------------------------------------------------------
-# Layers 2 + 3 - calculate, then tell the story
-# ---------------------------------------------------------------------
+# Layers 2 + 3 - calculate then build the story
 if st.button(
     "See my footprint ➜",
     type="primary",
@@ -173,24 +233,16 @@ if st.button(
     help="Calculate your estimated monthly carbon footprint based on the inputs above.",
 ):
     try:
-        lifestyle = UserLifestyleInput(
-            transport=TransportInput(
-                mode=transport_code_by_label[transport_choice],
-                weekly_distance_km=weekly_distance_km,
-            ),
-            energy=EnergyInput(
-                monthly_electricity_kwh=monthly_electricity_kwh,
-                cooking_fuel=fuel_code_by_label[fuel_choice],
-            ),
-            diet=DietInput(diet_type=diet_code_by_label[diet_choice]),
+        lifestyle = build_lifestyle_input(
+            transport_mode, weekly_distance_km,
+            monthly_electricity_kwh, cooking_fuel,
+            diet_type,
         )
-
         result = calculate_footprint(lifestyle)
         story = build_story(result)
 
-        # Stash everything in session_state so the "How can I reduce
-        # this?" button below survives the rerun Streamlit triggers
-        # on every interaction.
+        # Stash in session_state so results survive the rerun Streamlit
+        # triggers on every interaction.
         st.session_state["lifestyle"] = lifestyle
         st.session_state["result"] = result
         st.session_state["story"] = story
@@ -211,49 +263,7 @@ if st.button(
             "If this persists, please reload the page."
         )
 
-# ---------------------------------------------------------------------
-# Render the AI Awareness Card if we have a result
-# Accessibility: st.metric is announced as a labelled value by screen
-# readers; column layout is avoided for the breakdown so each line
-# appears in document order without needing visual scanning.
-# ---------------------------------------------------------------------
+# Layer 3 output + Layer 4 on-demand button
 if "result" in st.session_state:
-    result = st.session_state["result"]
-    story = st.session_state["story"]
-
-    # Primary result — metric widget has a label read by assistive tech
-    st.metric(
-        label="Estimated monthly carbon footprint",
-        value=f"{result.total_kg_co2_per_month:,.0f} kg CO₂/month",
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Where it came from**")
-        for b in result.breakdown:
-            st.write(f"{b.category.title()}: {b.percentage_of_total:.0f}%")
-    with col2:
-        st.markdown("**Equivalent to**")
-        for line in story.equivalents:
-            st.write(f"• {line}")
-
-    st.divider()
-    st.markdown("### 🪄 The story behind your number")
-    st.write(story.narrative)
-
-    # The reduction tips button is intentionally not shown automatically —
-    # it only appears after a result exists, and only runs when clicked.
-    # This respects the app's core philosophy: curiosity-driven, not pushed.
-    if st.button(
-        "How can I reduce this? 🌱",
-        key="get_recommendations_btn",
-        help=(
-            "Get personalised, evidence-based suggestions for reducing "
-            "your footprint — tailored to your biggest contributor."
-        ),
-    ):
-        with st.spinner("Putting together a few ideas..."):
-            tips = generate_recommendations(result, st.session_state["lifestyle"])
-        st.markdown("**A few places to start:**")
-        for tip in tips:
-            st.write(f"- {tip}")
+    render_results(st.session_state["result"], st.session_state["story"])
+    render_recommendations(st.session_state["result"], st.session_state["lifestyle"])
