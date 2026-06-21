@@ -1,4 +1,6 @@
-# 🌍 Carbon Awareness
+# 🌍 CarbonLens
+
+[![CI](https://github.com/DeemonDuck/CarbonLens/actions/workflows/ci.yml/badge.svg)](https://github.com/DeemonDuck/CarbonLens/actions/workflows/ci.yml)
 
 **See the weight of your everyday choices — without being nagged about them.**
 
@@ -66,8 +68,16 @@ everything else.
 |---|---|---|
 | **1. Input Collection** | Validates what the user enters before anything else touches it | `backend/schemas.py` |
 | **2. Emission Calculation** | Turns validated input into kg CO₂, broken down by category | `backend/calculator.py`, `backend/emission_factors.py` |
-| **3. Awareness Translator** | Converts the raw number into relatable comparisons + a short narrative | `backend/awareness.py` |
+| **3. Awareness Translator** | Converts the raw number into relatable comparisons + a short narrative, returned as a typed `StoryCard` | `backend/awareness.py` |
 | **4. On-Demand Tips** | Generates reduction suggestions — only when asked, never automatically | `backend/recommendations.py` |
+
+Every layer's input and output is a typed Pydantic model — including
+the "story card" Layer 3 hands to the UI — so a typo in a field name
+fails loudly at construction time instead of silently breaking a render
+somewhere downstream. Human-readable labels (what a user sees in a
+dropdown vs. what the system stores) live in exactly one place too,
+in `backend/schemas.py`, so the frontend never maintains its own
+duplicate copy that can drift out of sync.
 
 Layer 4 quietly upgrades itself: if an Anthropic API key is configured, it
 generates tips personalized to your exact numbers using Claude. If not
@@ -82,18 +92,23 @@ app works fully out of the box, no API key required.
 - **Streamlit** for the UI
 - **Pydantic** for strict, self-documenting data validation between layers
 - **Anthropic API** (optional) for personalized reduction tips
-- **Pytest** for testing the calculation engine
+- **Pytest** for testing — including a headless Streamlit `AppTest`
+  suite that simulates real clicks without a browser
+- **mypy** + **ruff** for type-checking and linting, enforced in CI
 
 ---
 
 ## Project structure
 
 ```
-carbon-awareness-app/
+carbon-lens-app/
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # lint + type-check + tests, on every push
 ├── frontend/
 │   └── app.py              # Streamlit UI - orchestrates all layers
 ├── backend/
-│   ├── schemas.py           # data contracts between layers
+│   ├── schemas.py           # data contracts between layers + UI labels
 │   ├── emission_factors.py  # sourced reference constants
 │   ├── calculator.py        # Layer 2 - the carbon math
 │   ├── awareness.py         # Layer 3 - equivalents + story builder
@@ -103,9 +118,13 @@ carbon-awareness-app/
 │   └── config.toml           # app theme
 ├── assets/                   # icons, demo GIFs, screenshots
 ├── tests/
-│   └── test_calculator.py    # proves the math is correct, not just plausible
+│   ├── test_calculator.py    # Layer 2 - the math
+│   ├── test_awareness.py     # Layer 3 - story/equivalents
+│   ├── test_recommendations.py  # Layer 4 - mocked LLM + fallback paths
+│   └── test_app.py            # full UI flow, headless (no browser)
+├── pyproject.toml             # ruff + mypy + pytest config
 ├── requirements.txt           # what the deployed app needs
-├── requirements-dev.txt       # + pytest, local development only
+├── requirements-dev.txt       # + pytest/ruff/mypy, local dev only
 └── .gitignore
 ```
 
@@ -139,12 +158,16 @@ streamlit run frontend/app.py
    ANTHROPIC_API_KEY = "your_key_here"
    ```
 
-## Running tests
+## Running tests, lint, and type-checks
 
 ```bash
 pip install -r requirements-dev.txt
-pytest tests/ -v
+pytest tests/ -v        # 19 tests across all 4 layers + full UI flow
+ruff check .             # lint
+mypy backend/            # type-check
 ```
+
+All three run automatically on every push via `.github/workflows/ci.yml`.
 
 ---
 
