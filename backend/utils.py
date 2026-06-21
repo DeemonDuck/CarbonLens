@@ -10,6 +10,15 @@ a local file.
 """
 
 import os
+from typing import TYPE_CHECKING
+
+from streamlit.errors import StreamlitSecretNotFoundError
+
+if TYPE_CHECKING:
+    # Only imported for type hints, never at runtime - this keeps
+    # anthropic an optional dependency for anyone not using Layer 4's
+    # LLM path, while still giving editors/type-checkers a real type.
+    from anthropic import Anthropic
 
 
 def get_anthropic_api_key() -> str | None:
@@ -29,14 +38,13 @@ def get_anthropic_api_key() -> str | None:
     try:
         import streamlit as st
         return st.secrets.get("ANTHROPIC_API_KEY")
-    except Exception:
-        # Either streamlit isn't running in a context with secrets
-        # configured, or this is being called from a test/script
-        # outside Streamlit entirely. Either way - no key found.
+    except StreamlitSecretNotFoundError:
+        # No secrets.toml configured at all - perfectly normal for
+        # local runs or hosts (like HF Spaces) that use env vars instead.
         return None
 
 
-def get_anthropic_client():
+def get_anthropic_client() -> "Anthropic | None":
     """
     Returns an Anthropic client if a key is configured, otherwise None.
     Callers MUST handle the None case (see recommendations.py) - we
