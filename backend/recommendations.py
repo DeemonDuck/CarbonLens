@@ -100,12 +100,9 @@ def generate_recommendations(
     except AnthropicError:
         # Auth failure, rate limit, network drop, timeout - anything
         # the Anthropic SDK itself raises for a failed API call.
-        # Expected enough that it should never surface to the user;
-        # just fall back to the rule-based tips.
         return _rule_based_recommendations(result.dominant_category)
 
-    except (AttributeError, KeyError, IndexError):
+    except (AttributeError, TypeError):
         # The response came back in a shape we didn't expect (e.g. a
         # future SDK version changes response.content's structure).
-        # Same fallback - the user still gets useful tips either way.
         return _rule_based_recommendations(result.dominant_category)

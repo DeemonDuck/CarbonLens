@@ -12,13 +12,18 @@ Covers:
   - Narrative references the correct dominant category label
 """
 
+from typing import Literal
+
 import pytest
 
 from backend.awareness import build_equivalents, build_story
 from backend.schemas import CategoryBreakdown, FootprintResult, StoryCard
 
 
-def _make_result(total: float, dominant: str = "energy") -> FootprintResult:
+def _make_result(
+    total: float,
+    dominant: Literal["transport", "energy", "diet"] = "energy",
+) -> FootprintResult:
     """Build a FootprintResult with the given total, split 20/60/20 by default."""
     transport_pct = 20.0
     energy_pct = 60.0
@@ -49,7 +54,7 @@ def _make_result(total: float, dominant: str = "energy") -> FootprintResult:
     return FootprintResult(
         total_kg_co2_per_month=total,
         breakdown=breakdown,
-        dominant_category=dominant,  # type: ignore[arg-type]
+        dominant_category=dominant,
     )
 
 

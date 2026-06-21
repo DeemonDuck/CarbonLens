@@ -32,6 +32,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
+from typing import Literal, cast
 from backend.schemas import (
     UserLifestyleInput,
     TransportInput,
@@ -140,6 +141,17 @@ def render_diet_inputs() -> str:
     return diet_code_by_label[diet_choice]
 
 
+TransportMode = Literal[
+    "car_petrol", "car_diesel", "car_electric",
+    "two_wheeler", "public_transport", "walk_or_cycle",
+]
+CookingFuel = Literal["lpg", "piped_natural_gas", "electric", "firewood"]
+DietType = Literal[
+    "vegan", "vegetarian", "eggetarian",
+    "non_vegetarian_moderate", "non_vegetarian_heavy",
+]
+
+
 def build_lifestyle_input(
     transport_mode: str,
     weekly_distance_km: float,
@@ -150,14 +162,14 @@ def build_lifestyle_input(
     """Construct and validate the Layer 1 payload from raw form values."""
     return UserLifestyleInput(
         transport=TransportInput(
-            mode=transport_mode,  # type: ignore[arg-type]
+            mode=cast(TransportMode, transport_mode),
             weekly_distance_km=weekly_distance_km,
         ),
         energy=EnergyInput(
             monthly_electricity_kwh=monthly_electricity_kwh,
-            cooking_fuel=cooking_fuel,  # type: ignore[arg-type]
+            cooking_fuel=cast(CookingFuel, cooking_fuel),
         ),
-        diet=DietInput(diet_type=diet_type),  # type: ignore[arg-type]
+        diet=DietInput(diet_type=cast(DietType, diet_type)),
     )
 
 

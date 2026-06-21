@@ -43,7 +43,7 @@ TRANSPORT_EMISSION_FACTORS_KG_PER_KM = {
 # Indian household average).
 # Source: LPG combustion factor (2.983 kg CO2/kg) from the GHG
 # Protocol's emission factor tool; PNG/firewood figures are
-# approximated relative to LPG for a comparable energy outpu.
+# approximated relative to LPG for a comparable energy output.
 # Electric cooking is intentionally left at 0 here - that energy use
 # is already captured in monthly_electricity_kwh, so adding it again
 # here would double-count it.
