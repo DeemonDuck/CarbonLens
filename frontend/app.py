@@ -19,7 +19,15 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
-from backend.schemas import UserLifestyleInput, TransportInput, EnergyInput, DietInput
+from backend.schemas import (
+    UserLifestyleInput,
+    TransportInput,
+    EnergyInput,
+    DietInput,
+    TRANSPORT_MODE_LABELS,
+    COOKING_FUEL_LABELS,
+    DIET_TYPE_LABELS,
+)
 from backend.calculator import calculate_footprint
 from backend.awareness import build_story
 from backend.recommendations import generate_recommendations
@@ -38,42 +46,41 @@ st.divider()
 # Layer 1 - collect inputs
 # ---------------------------------------------------------------------
 st.subheader("🚗 Transport")
-transport_labels = {
-    "Petrol car": "car_petrol",
-    "Diesel car": "car_diesel",
-    "Electric car": "car_electric",
-    "Two-wheeler (bike/scooter)": "two_wheeler",
-    "Public transport (bus/metro/train)": "public_transport",
-    "Mostly walk or cycle": "walk_or_cycle",
-}
-transport_choice = st.selectbox("How do you mostly travel?", list(transport_labels.keys()))
+# Reverse the canonical {code: label} mapping so the selectbox can show
+# labels while we still store the underlying code - codes/labels live
+# in exactly one place (schemas.py), not duplicated here.
+transport_code_by_label = {label: code for code, label in TRANSPORT_MODE_LABELS.items()}
+transport_choice = st.selectbox(
+    "How do you mostly travel?",
+    list(TRANSPORT_MODE_LABELS.values()),
+    help="Whichever mode covers most of your weekly travel.",
+)
 weekly_distance_km = st.number_input(
     "Roughly how many km do you cover per week (all trips combined)?",
-    min_value=0.0, step=5.0, value=50.0
+    min_value=0.0, step=5.0, value=50.0,
+    help="All trips combined - commute, errands, everything.",
 )
 
 st.subheader("⚡ Energy")
 monthly_electricity_kwh = st.number_input(
     "Monthly electricity usage in units/kWh (check your electricity bill)",
-    min_value=0.0, step=10.0, value=150.0
+    min_value=0.0, step=10.0, value=150.0,
+    help="Found on your electricity bill, usually labeled 'units consumed.'",
 )
-fuel_labels = {
-    "LPG cylinder": "lpg",
-    "Piped natural gas (PNG)": "piped_natural_gas",
-    "Electric stove/induction": "electric",
-    "Firewood": "firewood",
-}
-fuel_choice = st.selectbox("What do you mostly cook with?", list(fuel_labels.keys()))
+fuel_code_by_label = {label: code for code, label in COOKING_FUEL_LABELS.items()}
+fuel_choice = st.selectbox(
+    "What do you mostly cook with?",
+    list(COOKING_FUEL_LABELS.values()),
+    help="Your primary cooking fuel, not occasional backups.",
+)
 
 st.subheader("🍽️ Diet")
-diet_labels = {
-    "Vegan": "vegan",
-    "Vegetarian": "vegetarian",
-    "Eggetarian": "eggetarian",
-    "Non-vegetarian (moderate, few times a week)": "non_vegetarian_moderate",
-    "Non-vegetarian (daily/heavy)": "non_vegetarian_heavy",
-}
-diet_choice = st.selectbox("Which best describes your diet?", list(diet_labels.keys()))
+diet_code_by_label = {label: code for code, label in DIET_TYPE_LABELS.items()}
+diet_choice = st.selectbox(
+    "Which best describes your diet?",
+    list(DIET_TYPE_LABELS.values()),
+    help="A general pattern, not a precise log - pick the closest fit.",
+)
 
 st.divider()
 
@@ -84,14 +91,14 @@ if st.button("See my footprint ➜", type="primary"):
     try:
         lifestyle = UserLifestyleInput(
             transport=TransportInput(
-                mode=transport_labels[transport_choice],
+                mode=transport_code_by_label[transport_choice],
                 weekly_distance_km=weekly_distance_km,
             ),
             energy=EnergyInput(
                 monthly_electricity_kwh=monthly_electricity_kwh,
-                cooking_fuel=fuel_labels[fuel_choice],
+                cooking_fuel=fuel_code_by_label[fuel_choice],
             ),
-            diet=DietInput(diet_type=diet_labels[diet_choice]),
+            diet=DietInput(diet_type=diet_code_by_label[diet_choice]),
         )
 
         result = calculate_footprint(lifestyle)
@@ -123,12 +130,12 @@ if "result" in st.session_state:
             st.write(f"{b.category.title()}: {b.percentage_of_total:.0f}%")
     with col2:
         st.markdown("**Equivalent to**")
-        for line in story["equivalents"]:
+        for line in story.equivalents:
             st.write(f"• {line}")
 
     st.divider()
     st.markdown("### 🪄 The story behind your number")
-    st.write(story["narrative"])
+    st.write(story.narrative)
 
     if st.button("How can I reduce this? 🌱"):
         with st.spinner("Putting together a few ideas..."):
