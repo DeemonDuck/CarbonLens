@@ -12,7 +12,7 @@ authoritative and rarely changes, but HOW we explain it is something
 you'll want to keep tweaking and experimenting with.
 """
 
-from backend.schemas import FootprintResult
+from backend.schemas import FootprintResult, StoryCard
 
 # ---------------------------------------------------------------------
 # Comparison reference points (approximate, commonly cited figures -
@@ -32,14 +32,14 @@ CATEGORY_LABELS = {
 
 def build_equivalents(result: FootprintResult) -> list[str]:
     """A handful of relatable comparisons for the total monthly footprint."""
- 
+
     total = result.total_kg_co2_per_month
- 
+
     km_equivalent = total / AVG_PETROL_CAR_KG_CO2_PER_KM
     trips_equivalent = km_equivalent / (DELHI_JAIPUR_ONE_WAY_KM * 2)  # round trips
     tree_years_equivalent = total / TREE_ABSORPTION_KG_CO2_PER_YEAR
     charges_equivalent = total / SMARTPHONE_CHARGE_KG_CO2
- 
+
     return [
         f"Like driving an average petrol car for {km_equivalent:,.0f} km "
         f"— roughly {trips_equivalent:.1f} Delhi–Jaipur round trips.",
@@ -49,20 +49,20 @@ def build_equivalents(result: FootprintResult) -> list[str]:
     ]
 
 
-def build_story(result: FootprintResult) -> dict:
+def build_story(result: FootprintResult) -> StoryCard:
     """
     Assembles the full 'AI Awareness Card' content: a headline, a short
     narrative paragraph, and the supporting equivalents - everything
     the frontend needs to render the story instead of a bare number.
     """
- 
+
     dominant_label = CATEGORY_LABELS[result.dominant_category]
     dominant_breakdown = next(
         b for b in result.breakdown if b.category == result.dominant_category
     )
- 
+
     headline = f"You generated {result.total_kg_co2_per_month:,.0f} kg CO₂ this month."
- 
+
     narrative = (
         f"That's not one big decision - it's the sum of small, everyday ones. "
         f"{dominant_label} is doing most of the damage here, contributing "
@@ -70,12 +70,11 @@ def build_story(result: FootprintResult) -> dict:
         f"Nobody's asking you to overhaul your life overnight - but knowing "
         f"where the weight is sitting is the first real step."
     )
- 
-    return {
-        "headline": headline,
-        "narrative": narrative,
-        "dominant_category": result.dominant_category,
-        "dominant_percentage": dominant_breakdown.percentage_of_total,
-        "equivalents": build_equivalents(result),
-    }
- 
+
+    return StoryCard(
+        headline=headline,
+        narrative=narrative,
+        dominant_category=result.dominant_category,
+        dominant_percentage=dominant_breakdown.percentage_of_total,
+        equivalents=build_equivalents(result),
+    )
