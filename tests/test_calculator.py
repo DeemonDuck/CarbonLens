@@ -6,13 +6,8 @@ These exist so that when you (or a recruiter skimming your repo) ask
 instead of "trust me".
 """
 
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from backend.schemas import UserLifestyleInput, TransportInput, EnergyInput, DietInput
 from backend.calculator import calculate_footprint
+from backend.schemas import DietInput, EnergyInput, TransportInput, UserLifestyleInput
 
 
 def _sample_input(**overrides):
