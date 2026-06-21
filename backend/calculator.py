@@ -7,19 +7,23 @@ FootprintResult this produces - they never touch emission_factors.py
 directly. That keeps the math centralized and auditable in one place.
 """
 
-from backend.schemas import (
-    UserLifestyleInput,
-    FootprintResult,
-    CategoryBreakdown,
-)
+from typing import Literal
+
 from backend.emission_factors import (
-    TRANSPORT_EMISSION_FACTORS_KG_PER_KM,
     COOKING_FUEL_KG_CO2_PER_MONTH,
-    INDIA_GRID_EMISSION_FACTOR_KG_PER_KWH,
-    DIET_KG_CO2_PER_DAY,
-    WEEKS_PER_MONTH,
     DAYS_PER_MONTH,
+    DIET_KG_CO2_PER_DAY,
+    INDIA_GRID_EMISSION_FACTOR_KG_PER_KWH,
+    TRANSPORT_EMISSION_FACTORS_KG_PER_KM,
+    WEEKS_PER_MONTH,
 )
+from backend.schemas import (
+    CategoryBreakdown,
+    FootprintResult,
+    UserLifestyleInput,
+)
+
+CategoryName = Literal["transport", "energy", "diet"]
 
 
 def _transport_kg_per_month(data: UserLifestyleInput) -> float:
@@ -51,11 +55,14 @@ def calculate_footprint(data: UserLifestyleInput) -> FootprintResult:
 
     total_kg = round(transport_kg + energy_kg + diet_kg, 1)
 
-    raw = {
-        "transport": transport_kg,
-        "energy": energy_kg,
-        "diet": diet_kg,
-    }
+    # A typed list of (category, kg) pairs - keeps the Literal type
+    # intact end to end, unlike a plain dict[str, float] which would
+    # widen "transport"/"energy"/"diet" back down to a generic str.
+    category_totals: list[tuple[CategoryName, float]] = [
+        ("transport", transport_kg),
+        ("energy", energy_kg),
+        ("diet", diet_kg),
+    ]
 
     breakdown = [
         CategoryBreakdown(
@@ -63,10 +70,10 @@ def calculate_footprint(data: UserLifestyleInput) -> FootprintResult:
             kg_co2_per_month=kg,
             percentage_of_total=round((kg / total_kg) * 100, 1) if total_kg else 0.0,
         )
-        for category, kg in raw.items()
+        for category, kg in category_totals
     ]
 
-    dominant_category = max(raw, key=raw.get)
+    dominant_category = max(category_totals, key=lambda item: item[1])[0]
 
     return FootprintResult(
         total_kg_co2_per_month=total_kg,
