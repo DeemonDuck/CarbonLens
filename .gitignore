@@ -13,7 +13,6 @@ __pycache__/
 
 # Test cache
 .pytest_cache/
-__init__.py
 
 # IDE
 .vscode/
