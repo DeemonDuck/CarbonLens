@@ -17,6 +17,10 @@ limit), we silently fall back to tier 1. The user should never see
 a broken feature - just a slightly less personalized one.
 """
 
+from typing import Literal
+
+from anthropic import AnthropicError
+
 from backend.schemas import FootprintResult, UserLifestyleInput
 from backend.utils import get_anthropic_client
 
@@ -46,8 +50,10 @@ RULE_BASED_TIPS = {
 }
 
 
-def _rule_based_recommendations(dominant_category: str) -> list[str]:
-    return RULE_BASED_TIPS.get(dominant_category, [])
+def _rule_based_recommendations(
+    dominant_category: Literal["transport", "energy", "diet"]
+) -> list[str]:
+    return RULE_BASED_TIPS[dominant_category]
 
 
 def _build_llm_prompt(result: FootprintResult, user_input: UserLifestyleInput) -> str:
@@ -91,7 +97,15 @@ def generate_recommendations(
         tips = [line.strip(" -0123456789.") for line in text.split("\n") if line.strip()]
         return tips if tips else _rule_based_recommendations(result.dominant_category)
 
-    except Exception:
-        # Network issue, missing/invalid key, rate limit - whatever it is,
-        # the user still gets useful tips, just not LLM-personalized ones.
+    except AnthropicError:
+        # Auth failure, rate limit, network drop, timeout - anything
+        # the Anthropic SDK itself raises for a failed API call.
+        # Expected enough that it should never surface to the user;
+        # just fall back to the rule-based tips.
+        return _rule_based_recommendations(result.dominant_category)
+
+    except (AttributeError, KeyError, IndexError):
+        # The response came back in a shape we didn't expect (e.g. a
+        # future SDK version changes response.content's structure).
+        # Same fallback - the user still gets useful tips either way.
         return _rule_based_recommendations(result.dominant_category)
