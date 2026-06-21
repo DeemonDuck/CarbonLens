@@ -15,8 +15,9 @@ we can add new categories later (shopping, digital footprint, etc.)
 without touching the existing ones.
 """
 
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class TransportInput(BaseModel):
@@ -100,3 +101,54 @@ class FootprintResult(BaseModel):
     total_kg_co2_per_month: float
     breakdown: list[CategoryBreakdown]
     dominant_category: Literal["transport", "energy", "diet"]
+
+
+class StoryCard(BaseModel):
+    """
+    The complete output of Layer 3 (awareness.py).
+
+    A typed model instead of a raw dict means a typo in a field name
+    fails immediately at construction time, not silently when the UI
+    tries to render a missing key.
+    """
+
+    headline: str
+    narrative: str
+    dominant_category: Literal["transport", "energy", "diet"]
+    dominant_percentage: float
+    equivalents: list[str]
+
+
+# ---------------------------------------------------------------------
+# Human-readable labels for each input option.
+#
+# This is the single source of truth for "what a user sees" vs "what
+# the system stores." Previously the frontend kept its own hardcoded
+# copy of these mappings, which meant adding a new transport mode
+# required updating two files by hand and risked them drifting out of
+# sync. Now there's exactly one place to update.
+# ---------------------------------------------------------------------
+
+TRANSPORT_MODE_LABELS: dict[str, str] = {
+    "car_petrol": "Petrol car",
+    "car_diesel": "Diesel car",
+    "car_electric": "Electric car",
+    "two_wheeler": "Two-wheeler (bike/scooter)",
+    "public_transport": "Public transport (bus/metro/train)",
+    "walk_or_cycle": "Mostly walk or cycle",
+}
+
+COOKING_FUEL_LABELS: dict[str, str] = {
+    "lpg": "LPG cylinder",
+    "piped_natural_gas": "Piped natural gas (PNG)",
+    "electric": "Electric stove/induction",
+    "firewood": "Firewood",
+}
+
+DIET_TYPE_LABELS: dict[str, str] = {
+    "vegan": "Vegan",
+    "vegetarian": "Vegetarian",
+    "eggetarian": "Eggetarian",
+    "non_vegetarian_moderate": "Non-vegetarian (moderate, few times a week)",
+    "non_vegetarian_heavy": "Non-vegetarian (daily/heavy)",
+}
