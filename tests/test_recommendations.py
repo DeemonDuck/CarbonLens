@@ -7,10 +7,13 @@ call. They prove three things:
   2. A successful LLM response gets parsed into a clean tip list.
   3. Both SDK failures (auth, rate limit, etc.) AND malformed
      responses fall back gracefully instead of crashing the app.
+  4. All three dominant categories each have valid rule-based tips.
+  5. Edge cases: empty LLM response, whitespace-only lines.
 """
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from anthropic import AnthropicError
 
 from backend.recommendations import RULE_BASED_TIPS, generate_recommendations
@@ -43,14 +46,29 @@ def _sample_lifestyle():
     )
 
 
+# ------------------------------------------------------------------
+# Rule-based fallback - no API client
+# ------------------------------------------------------------------
+
 @patch("backend.recommendations.get_anthropic_client")
 def test_falls_back_to_rule_based_tips_when_no_client_configured(mock_get_client):
     mock_get_client.return_value = None
-
     tips = generate_recommendations(_sample_result(dominant="transport"), _sample_lifestyle())
-
     assert tips == RULE_BASED_TIPS["transport"]
 
+
+@pytest.mark.parametrize("dominant", ["transport", "energy", "diet"])
+@patch("backend.recommendations.get_anthropic_client")
+def test_all_dominant_categories_have_valid_rule_based_tips(mock_get_client, dominant):
+    mock_get_client.return_value = None
+    tips = generate_recommendations(_sample_result(dominant=dominant), _sample_lifestyle())
+    assert len(tips) >= 1
+    assert all(isinstance(t, str) and t for t in tips)
+
+
+# ------------------------------------------------------------------
+# LLM happy path
+# ------------------------------------------------------------------
 
 @patch("backend.recommendations.get_anthropic_client")
 def test_parses_a_successful_llm_response_into_clean_tips(mock_get_client):
@@ -72,13 +90,36 @@ def test_parses_a_successful_llm_response_into_clean_tips(mock_get_client):
 
 
 @patch("backend.recommendations.get_anthropic_client")
+def test_strips_numbering_prefix_from_llm_tips(mock_get_client):
+    fake_block = MagicMock()
+    fake_block.type = "text"
+    fake_block.text = "1. First tip.\n2. Second tip.\n3. Third tip."
+
+    fake_response = MagicMock()
+    fake_response.content = [fake_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+    mock_get_client.return_value = mock_client
+
+    tips = generate_recommendations(_sample_result(), _sample_lifestyle())
+
+    # None of the returned tips should start with a digit + dot
+    for tip in tips:
+        assert not tip[0].isdigit(), f"Tip still has numeric prefix: {tip!r}"
+
+
+# ------------------------------------------------------------------
+# LLM failure modes — all should fall back gracefully
+# ------------------------------------------------------------------
+
+@patch("backend.recommendations.get_anthropic_client")
 def test_falls_back_when_anthropic_sdk_raises(mock_get_client):
     mock_client = MagicMock()
     mock_client.messages.create.side_effect = AnthropicError("rate limited")
     mock_get_client.return_value = mock_client
 
     tips = generate_recommendations(_sample_result(dominant="diet"), _sample_lifestyle())
-
     assert tips == RULE_BASED_TIPS["diet"]
 
 
@@ -92,5 +133,22 @@ def test_falls_back_when_response_shape_is_unexpected(mock_get_client):
     mock_get_client.return_value = mock_client
 
     tips = generate_recommendations(_sample_result(dominant="energy"), _sample_lifestyle())
-
     assert tips == RULE_BASED_TIPS["energy"]
+
+
+@patch("backend.recommendations.get_anthropic_client")
+def test_falls_back_when_llm_returns_empty_text(mock_get_client):
+    """Empty or whitespace-only LLM response should produce rule-based tips."""
+    fake_block = MagicMock()
+    fake_block.type = "text"
+    fake_block.text = "   \n\n   "
+
+    fake_response = MagicMock()
+    fake_response.content = [fake_block]
+
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = fake_response
+    mock_get_client.return_value = mock_client
+
+    tips = generate_recommendations(_sample_result(dominant="transport"), _sample_lifestyle())
+    assert tips == RULE_BASED_TIPS["transport"]
